@@ -1,0 +1,6 @@
+{
+  "name": "Amazon Image Viewer",
+  "description": "Free bulk Amazon product image viewer with Excel link editing, gallery management, and auto-save via IndexedDB.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
