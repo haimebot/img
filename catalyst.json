@@ -1,0 +1,14 @@
+{
+  "appsail": [
+    {
+      "name": "img3-0",
+      "source": ".",
+      "build_command": "npm run build",
+      "command": "npm start",
+      "stack": "node22"
+    }
+  ],
+  "client": {
+    "source": "dist"
+  }
+}

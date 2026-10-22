@@ -12,6 +12,7 @@ This application is built with React 19, Vite, Tailwind CSS, and a Node.js Expre
 | **Netlify** | Static + Edge | `netlify.toml` | `npm run build` |
 | **Docker / Cloud Run / AWS / Azure** | Container | `Dockerfile` | `node dist/server.cjs` |
 | **Render** | Node.js PaaS | `render.yaml` | `npm run start` |
+| **Zoho Catalyst (Slate / AppSail)** | Serverless / AppSail | `catalyst.json`, `app-config.json` | `npm run start` |
 | **Railway** | Node.js PaaS / Nixpacks | `Procfile` / `Dockerfile` | `npm run start` |
 | **Heroku / Dokku** | 12-factor PaaS | `Procfile` | `npm run start` |
 | **Linux VPS (Ubuntu / Debian)** | Self-hosted | `docker-compose.yml` or PM2 | `docker compose up -d` |
@@ -76,7 +77,47 @@ docker compose up -d
 
 ---
 
-## 5. Netlify Deployment
+## 5. Zoho Catalyst Deployment (Slate / AppSail)
+
+### The Error You May Have Seen:
+```
+npm error enoent Could not read package.json: Error: ENOENT: no such file or directory, open '/catalyst/img3.0/package.json'
+```
+**Why this happened:**
+1. **Repository nesting:** When pushing code to GitHub, the files were placed inside a subfolder (e.g. `img3.0/amazon-image-viewer/package.json` instead of directly at the root `package.json`).
+2. **Missing Base Directory in Catalyst Console:** Zoho Catalyst Slate Deployer cloned into `/catalyst/img3.0/` and expected `package.json` at the root of that clone.
+
+### How to Fix & Deploy on Zoho Catalyst:
+
+#### Option A: Direct AppSail / GitHub Git Integration
+1. Open your repository on GitHub.
+2. Ensure `package.json`, `package-lock.json`, `app-config.json`, and `catalyst.json` are in the **top-level root** of the repository (not inside an extra nested folder).
+3. In Zoho Catalyst Console:
+   - Navigate to **AppSail** -> **Create an AppSail Service**.
+   - Runtime: **Node.js 22** (or matching version).
+   - Source: **GitHub**. Select repository `img3.0`.
+   - **Base / Root Directory**: Enter `.` (or if your project files are inside a subfolder, enter that subfolder name, e.g. `amazon-image-viewer`).
+   - Build Command: `npm install && npm run build`
+   - Start Command: `npm run start`
+   - Port: `3000`
+4. Click **Deploy**.
+
+#### Option B: Deploy using Catalyst CLI
+```bash
+# Install Catalyst CLI
+npm install -g zcatalyst-cli
+
+# Login and initialize in your project directory
+catalyst login
+catalyst init
+
+# Deploy directly
+catalyst deploy
+```
+
+---
+
+## 6. Netlify Deployment
 
 1. Link your repository in [Netlify](https://app.netlify.com).
 2. Netlify will read `netlify.toml` automatically:
@@ -86,7 +127,7 @@ docker compose up -d
 
 ---
 
-## 6. Self-Hosted Linux VPS (Ubuntu / Debian with PM2)
+## 7. Self-Hosted Linux VPS (Ubuntu / Debian with PM2)
 
 If running directly on a Linux server without Docker:
 
@@ -125,7 +166,7 @@ server {
 
 ---
 
-## 7. Environment Variables
+## 8. Environment Variables
 
 All environment variables are optional. Built-in defaults and browser-side canvas fallbacks ensure the app works immediately out of the box.
 
@@ -138,7 +179,7 @@ All environment variables are optional. Built-in defaults and browser-side canva
 
 ---
 
-## 8. Health Check Endpoint
+## 9. Health Check Endpoint
 
 All container orchestrators and load balancers can monitor application health at:
 ```http
