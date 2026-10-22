@@ -60,6 +60,115 @@ interface ModalViewerProps {
   onOpenImgbbSettings?: () => void;
 }
 
+interface ModalSlideImageProps {
+  item: ImageItem;
+  isCurrent: boolean;
+  onOpenEditLink: (item: ImageItem) => void;
+}
+
+const ModalSlideImage: React.FC<ModalSlideImageProps> = ({ item, isCurrent, onOpenEditLink }) => {
+  const isRemote = isRemoteImageUrl(item.link);
+  const candidates = useMemo(() => {
+    if (!isRemote) return [BROKEN_IMG_SVG];
+    return getImageCandidates(item.link, 1200);
+  }, [item.link, isRemote]);
+
+  const [candidateIdx, setCandidateIdx] = useState(0);
+  const [isLoaded, setIsLoaded] = useState(false);
+  const [isFailed, setIsFailed] = useState(false);
+  const imgRef = useRef<HTMLImageElement>(null);
+
+  useEffect(() => {
+    setCandidateIdx(0);
+    setIsLoaded(false);
+    setIsFailed(!isRemote);
+  }, [item.link, isRemote]);
+
+  useEffect(() => {
+    if (imgRef.current && imgRef.current.complete && imgRef.current.naturalWidth > 0) {
+      setIsLoaded(true);
+      setIsFailed(false);
+    }
+  }, [candidateIdx, item.link]);
+
+  const handleError = () => {
+    if (candidateIdx + 1 < candidates.length) {
+      setCandidateIdx(prev => prev + 1);
+    } else {
+      setIsFailed(true);
+      setIsLoaded(true);
+    }
+  };
+
+  const handleRetry = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setIsFailed(false);
+    setIsLoaded(false);
+    setCandidateIdx(0);
+  };
+
+  const currentSrc = isFailed ? BROKEN_IMG_SVG : candidates[candidateIdx] || BROKEN_IMG_SVG;
+
+  return (
+    <div className="relative w-full h-full flex items-center justify-center overflow-hidden">
+      {/* Subtle skeleton while loading first time */}
+      {!isLoaded && !isFailed && (
+        <div className="absolute inset-0 bg-slate-100/50 dark:bg-slate-900/50 flex flex-col items-center justify-center animate-pulse z-10 rounded-xl">
+          <Loader2 className="w-8 h-8 animate-spin text-amber-400 mb-1.5" />
+          <span className="text-[11px] font-mono text-slate-400">Loading...</span>
+        </div>
+      )}
+
+      {/* Failed fallback with Quick Fix / Edit Link */}
+      {isFailed && (
+        <div className="absolute inset-0 flex flex-col items-center justify-center p-3 text-center z-20 bg-slate-100/90 dark:bg-slate-900/95 rounded-xl border border-rose-500/30">
+          <AlertTriangle className="w-8 h-8 text-amber-500 mb-1" />
+          <p className="text-xs font-bold text-slate-800 dark:text-slate-200">Image load failed</p>
+          <p className="text-[10px] text-slate-500 dark:text-slate-400 max-w-[220px] truncate mt-0.5">{item.link}</p>
+          <div className="flex items-center gap-1.5 mt-2.5">
+            <button
+              type="button"
+              onClick={handleRetry}
+              className="px-2.5 py-1 bg-amber-400 hover:bg-amber-500 text-slate-950 text-[10px] font-bold rounded shadow-xs cursor-pointer flex items-center gap-1"
+            >
+              <RefreshCw className="w-3 h-3" />
+              <span>Retry</span>
+            </button>
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onOpenEditLink(item);
+              }}
+              className="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-white text-[10px] font-bold rounded shadow-xs cursor-pointer flex items-center gap-1"
+            >
+              <Edit3 className="w-3 h-3" />
+              <span>Fix Link</span>
+            </button>
+          </div>
+        </div>
+      )}
+
+      <img
+        ref={imgRef}
+        src={currentSrc}
+        alt={`Amazon product ${item.sku} image ${item.imgNo}`}
+        referrerPolicy="no-referrer"
+        loading={isCurrent ? "eager" : "lazy"}
+        decoding="async"
+        className={`max-w-full max-h-full object-contain transition-opacity duration-150 ${
+          isLoaded && !isFailed ? 'opacity-100' : 'opacity-0'
+        }`}
+        onLoad={() => {
+          setIsLoaded(true);
+          setIsFailed(false);
+        }}
+        onError={handleError}
+      />
+    </div>
+  );
+};
+
 export const ModalViewer: React.FC<ModalViewerProps> = ({
   isOpen,
   item,
@@ -84,10 +193,6 @@ export const ModalViewer: React.FC<ModalViewerProps> = ({
   onOpenImgbbSettings
 }) => {
   const [copiedLink, setCopiedLink] = useState(false);
-  const [stageCandidateIdx, setStageCandidateIdx] = useState(0);
-  const [isStageLoaded, setIsStageLoaded] = useState(false);
-  const [isStageFailed, setIsStageFailed] = useState(false);
-  const stageImgRef = useRef<HTMLImageElement>(null);
 
   // Slide Speed & Slideshow State
   const [isPlaying, setIsPlaying] = useState(false);
@@ -101,30 +206,6 @@ export const ModalViewer: React.FC<ModalViewerProps> = ({
   });
   const [slideDirection, setSlideDirection] = useState<'next' | 'prev' | 'none'>('none');
   const [slideProgress, setSlideProgress] = useState(0);
-
-  const isRemote = Boolean(item && isRemoteImageUrl(item.link));
-
-  const stageCandidates = useMemo(() => {
-    if (!item || !isRemote) return [BROKEN_IMG_SVG];
-    return getImageCandidates(item.link, 1200);
-  }, [item?.link, isRemote]);
-
-  // Reset stage load states when link or item changes
-  useEffect(() => {
-    setStageCandidateIdx(0);
-    setIsStageLoaded(false);
-    setIsStageFailed(!isRemote);
-  }, [item?.id, item?.link, isRemote]);
-
-  // Check if image is already cached in browser
-  useEffect(() => {
-    if (stageImgRef.current && stageImgRef.current.complete) {
-      if (stageImgRef.current.naturalWidth > 0) {
-        setIsStageLoaded(true);
-        setIsStageFailed(false);
-      }
-    }
-  }, [stageCandidates, stageCandidateIdx]);
 
   // Preload adjacent images in product group for instantaneous slide speed
   useEffect(() => {
@@ -154,7 +235,6 @@ export const ModalViewer: React.FC<ModalViewerProps> = ({
   const handlePrev = useCallback(() => {
     if (currentIndexInGroup > 0) {
       setSlideDirection('prev');
-      setIsStageLoaded(false);
       onNavigateGroup(currentIndexInGroup - 1);
     }
   }, [currentIndexInGroup, onNavigateGroup]);
@@ -162,12 +242,10 @@ export const ModalViewer: React.FC<ModalViewerProps> = ({
   const handleNext = useCallback(() => {
     if (currentIndexInGroup < productGroup.length - 1) {
       setSlideDirection('next');
-      setIsStageLoaded(false);
       onNavigateGroup(currentIndexInGroup + 1);
     } else if (isPlaying) {
       // Loop to beginning in auto slideshow
       setSlideDirection('next');
-      setIsStageLoaded(false);
       onNavigateGroup(0);
     }
   }, [currentIndexInGroup, productGroup.length, onNavigateGroup, isPlaying]);
@@ -175,7 +253,6 @@ export const ModalViewer: React.FC<ModalViewerProps> = ({
   const handleSelectSlide = useCallback((pos: number) => {
     if (pos !== currentIndexInGroup) {
       setSlideDirection(pos > currentIndexInGroup ? 'next' : 'prev');
-      setIsStageLoaded(false);
       onNavigateGroup(pos);
     }
   }, [currentIndexInGroup, onNavigateGroup]);
@@ -275,16 +352,6 @@ export const ModalViewer: React.FC<ModalViewerProps> = ({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isOpen, item, handlePrev, handleNext, handleTogglePlay, handleChangeSpeed, slideSpeed, onDeleteCurrent, onHighlightCurrent, onKeepAndNextSKU, onClose, onOpenEditLink, onOpenEditMetadata]);
 
-  const handleStageError = () => {
-    if (stageCandidateIdx + 1 < stageCandidates.length) {
-      setStageCandidateIdx(prev => prev + 1);
-      setIsStageLoaded(false);
-    } else {
-      setIsStageFailed(true);
-      setIsStageLoaded(true);
-    }
-  };
-
   const handleCopyLink = () => {
     if (item?.link) {
       navigator.clipboard.writeText(item.link);
@@ -295,8 +362,8 @@ export const ModalViewer: React.FC<ModalViewerProps> = ({
 
   if (!isOpen || !item) return null;
 
+  const isRemote = isRemoteImageUrl(item.link);
   const isFirstImage = item.imgNo === 1;
-  const stageSrc = stageCandidates[stageCandidateIdx] || (isRemote ? cleanImageUrl(item.link) : BROKEN_IMG_SVG);
 
   return (
     <div className="fixed inset-0 z-[9000] flex items-center justify-center bg-black/90 p-3 sm:p-6 backdrop-blur-sm animate-in fade-in duration-200">
@@ -436,37 +503,8 @@ export const ModalViewer: React.FC<ModalViewerProps> = ({
             <div
               onTouchStart={handleTouchStart}
               onTouchEnd={handleTouchEnd}
-              className="relative max-w-full max-h-full aspect-square bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl overflow-hidden shadow-2xl flex items-center justify-center p-2 touch-pan-y"
+              className="relative max-w-full max-h-full aspect-square bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl overflow-hidden shadow-2xl flex items-center justify-center p-0 touch-pan-y"
             >
-              {/* Shimmer skeleton while high-res image is loading */}
-              {!isStageLoaded && !isStageFailed && !isRemovingBg && (
-                <div className="absolute inset-0 bg-slate-100/80 dark:bg-slate-900/80 backdrop-blur-xs flex flex-col items-center justify-center z-10 animate-pulse">
-                  <Loader2 className="w-8 h-8 animate-spin text-amber-400 mb-2" />
-                  <span className="text-[11px] font-mono font-medium text-slate-500 dark:text-slate-400">Loading High-Res Slide...</span>
-                </div>
-              )}
-
-              {/* Load Failed Retry Screen */}
-              {isStageFailed && !isRemovingBg && (
-                <div className="absolute inset-0 flex flex-col items-center justify-center p-4 text-center z-20 bg-slate-50 dark:bg-slate-900/95">
-                  <AlertTriangle className="w-10 h-10 text-amber-500 mb-2" />
-                  <p className="text-xs font-bold text-slate-700 dark:text-slate-300">Image could not be loaded</p>
-                  <p className="text-[10px] text-slate-500 dark:text-slate-400 max-w-xs mt-1 truncate">{item.link}</p>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setIsStageFailed(false);
-                      setIsStageLoaded(false);
-                      setStageCandidateIdx(0);
-                    }}
-                    className="mt-3 px-3 py-1 bg-amber-400 hover:bg-amber-500 text-slate-950 text-xs font-bold rounded-lg shadow-sm flex items-center gap-1.5 cursor-pointer"
-                  >
-                    <RefreshCw className="w-3.5 h-3.5" />
-                    <span>Retry Load</span>
-                  </button>
-                </div>
-              )}
-
               {/* Removing BG processing overlay */}
               {isRemovingBg && (
                 <div className="absolute inset-0 bg-slate-950/80 backdrop-blur-xs flex flex-col items-center justify-center z-30 gap-2 text-white">
@@ -475,26 +513,29 @@ export const ModalViewer: React.FC<ModalViewerProps> = ({
                 </div>
               )}
 
-              <img
-                key={`${item.id}-${stageSrc}`}
-                ref={stageImgRef}
-                src={stageSrc}
-                alt={`Amazon product ${item.sku} image ${item.imgNo}`}
-                referrerPolicy="no-referrer"
-                loading="eager"
-                decoding="async"
-                className={`max-w-full max-h-full object-contain transition-all duration-200 ease-out will-change-transform ${
-                  isStageLoaded && !isStageFailed ? 'opacity-100 scale-100' : 'opacity-0 scale-95'
-                }`}
-                onLoad={() => {
-                  setIsStageLoaded(true);
-                  setIsStageFailed(false);
+              {/* 60FPS Hardware-Accelerated Sliding Track - Zero Lag, Pure 60fps Motion */}
+              <div
+                className="flex h-full w-full transition-transform duration-220 ease-out will-change-transform"
+                style={{
+                  transform: `translateX(-${currentIndexInGroup * 100}%)`,
                 }}
-                onError={handleStageError}
-              />
+              >
+                {productGroup.map((grpItem, pos) => (
+                  <div
+                    key={grpItem.id}
+                    className="w-full min-w-full h-full flex items-center justify-center p-2 shrink-0 relative"
+                  >
+                    <ModalSlideImage
+                      item={grpItem}
+                      isCurrent={pos === currentIndexInGroup}
+                      onOpenEditLink={onOpenEditLink}
+                    />
+                  </div>
+                ))}
+              </div>
 
               {/* Counter & Status Overlay */}
-              <div className="absolute bottom-2.5 sm:bottom-3 left-1/2 -translate-x-1/2 bg-white/90 dark:bg-slate-950/80 border border-slate-200 dark:border-slate-800 text-slate-800 dark:text-slate-200 text-xs font-bold px-3 py-1 rounded-full backdrop-blur-xs flex items-center gap-2 shadow-sm z-10">
+              <div className="absolute bottom-2.5 sm:bottom-3 left-1/2 -translate-x-1/2 bg-white/90 dark:bg-slate-950/80 border border-slate-200 dark:border-slate-800 text-slate-800 dark:text-slate-200 text-xs font-bold px-3 py-1 rounded-full backdrop-blur-xs flex items-center gap-2 shadow-sm z-20 pointer-events-none">
                 <span>{currentIndexInGroup + 1} / {productGroup.length}</span>
                 {isPlaying && (
                   <span className="text-[10px] text-amber-500 font-mono animate-pulse">

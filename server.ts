@@ -1,5 +1,6 @@
 import express from 'express';
 import path from 'path';
+import fs from 'fs';
 import { fileURLToPath } from 'url';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -7,7 +8,7 @@ const __dirname = path.dirname(__filename);
 
 async function startServer() {
   const app = express();
-  const PORT = 3000;
+  const PORT = Number(process.env.PORT) || 3000;
 
   app.use(express.json({ limit: '20mb' }));
 
@@ -145,7 +146,24 @@ async function startServer() {
 
       const arrayBuffer = await response.arrayBuffer();
       const buffer = Buffer.from(arrayBuffer);
-      const contentType = response.headers.get('content-type') || 'image/jpeg';
+      
+      // Sniff magic bytes to guarantee valid image MIME type for Chrome & Brave CORB compliance
+      let contentType = response.headers.get('content-type') || '';
+      if (!contentType.startsWith('image/') || contentType.includes('octet-stream')) {
+        if (buffer.length >= 3 && buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff) {
+          contentType = 'image/jpeg';
+        } else if (buffer.length >= 8 && buffer[0] === 0x89 && buffer[1] === 0x50 && buffer[2] === 0x4e && buffer[3] === 0x47) {
+          contentType = 'image/png';
+        } else if (buffer.length >= 4 && buffer[0] === 0x47 && buffer[1] === 0x49 && buffer[2] === 0x46) {
+          contentType = 'image/gif';
+        } else if (buffer.length >= 12 && buffer.toString('ascii', 0, 4) === 'RIFF' && buffer.toString('ascii', 8, 12) === 'WEBP') {
+          contentType = 'image/webp';
+        } else if (buffer.length >= 8 && buffer.toString('ascii', 4, 8) === 'ftyp') {
+          contentType = 'image/avif';
+        } else {
+          contentType = 'image/jpeg';
+        }
+      }
 
       // Store in Memory Cache (evict oldest if size > 1500)
       if (proxyMemoryCache.size > 1500) {
@@ -175,6 +193,8 @@ async function startServer() {
     }
   };
 
+  app.options('/api/proxy-image', (req, res) => res.status(200).end());
+  app.options('/api/proxy-img', (req, res) => res.status(200).end());
   app.get('/api/proxy-image', handleProxyImage);
   app.head('/api/proxy-image', handleProxyImage);
   app.post('/api/proxy-image', handleProxyImage);
@@ -555,20 +575,22 @@ async function startServer() {
     }
   });
 
-  // Vite middleware in development
-  if (process.env.NODE_ENV !== 'production') {
+  // Production static file serving vs Vite development middleware
+  const distPath = path.join(process.cwd(), 'dist');
+  const hasDist = fs.existsSync(path.join(distPath, 'index.html'));
+
+  if (process.env.NODE_ENV === 'production' || hasDist) {
+    app.use(express.static(distPath));
+    app.get('*', (req, res) => {
+      res.sendFile(path.join(distPath, 'index.html'));
+    });
+  } else {
     const { createServer: createViteServer } = await import('vite');
     const vite = await createViteServer({
       server: { middlewareMode: true },
       appType: 'spa',
     });
     app.use(vite.middlewares);
-  } else {
-    const distPath = path.join(process.cwd(), 'dist');
-    app.use(express.static(distPath));
-    app.get('*', (req, res) => {
-      res.sendFile(path.join(distPath, 'index.html'));
-    });
   }
 
   app.listen(PORT, '0.0.0.0', () => {

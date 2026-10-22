@@ -120,13 +120,22 @@ export const ImageCard: React.FC<ImageCardProps> = memo(({
           <div className="absolute inset-0 flex flex-col items-center justify-center p-2 text-center bg-slate-100 dark:bg-slate-900/90 z-10">
             <AlertTriangle className="w-6 h-6 text-amber-500 mb-1" />
             <span className="text-[10px] text-slate-500 dark:text-slate-400 font-mono truncate max-w-full px-1">Load Failed</span>
-            <button
-              type="button"
-              onClick={handleRetry}
-              className="mt-1.5 px-2 py-0.5 bg-amber-400 hover:bg-amber-500 text-slate-950 text-[9px] font-bold rounded shadow-xs cursor-pointer"
-            >
-              Retry
-            </button>
+            <div className="flex items-center gap-1 mt-1.5">
+              <button
+                type="button"
+                onClick={handleRetry}
+                className="px-2 py-0.5 bg-amber-400 hover:bg-amber-500 text-slate-950 text-[9px] font-bold rounded shadow-xs cursor-pointer"
+              >
+                Retry
+              </button>
+              <button
+                type="button"
+                onClick={(e) => onOpenEditLink(item, e)}
+                className="px-2 py-0.5 bg-slate-800 hover:bg-slate-700 text-white text-[9px] font-bold rounded shadow-xs cursor-pointer"
+              >
+                Fix Link
+              </button>
+            </div>
           </div>
         )}
 
@@ -139,7 +148,6 @@ export const ImageCard: React.FC<ImageCardProps> = memo(({
         )}
 
         <img
-          key={currentSrc}
           ref={imgRef}
           src={currentSrc}
           alt={`Amazon product ${item.sku} image ${item.imgNo}`}

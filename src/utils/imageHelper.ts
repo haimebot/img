@@ -402,10 +402,10 @@ export async function clientSideRemoveBg(
     const img = new Image();
     img.crossOrigin = 'anonymous';
 
-    // Route remote URLs through CORS-enabled accelerator to avoid canvas taint
+    // Route remote URLs through CORS-enabled local proxy to guarantee zero canvas taint across Chrome, Brave & Safari
     let sourceUrl = imageUrl;
     if (sourceUrl.startsWith('http://') || sourceUrl.startsWith('https://')) {
-      sourceUrl = `https://images.weserv.nl/?url=${encodeURIComponent(imageUrl)}&output=png`;
+      sourceUrl = `/api/proxy-image?url=${encodeURIComponent(imageUrl)}`;
     }
 
     img.onload = () => {
